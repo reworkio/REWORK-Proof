@@ -123,3 +123,5 @@ same result as a check run.
 ## Licence
 
 MIT — see [LICENSE](LICENSE).
+
+<!-- test -->
