@@ -57,6 +57,19 @@ outputs:
       The signed VC-JWT, when attest is enabled. Verify it offline against
       https://api.reworkdigital.io/api/v1/proofs/credentials/jwks.json
     value: ${{ steps.verify.outputs.credential }}
+  credential-sha256:
+    description: 'Digest the OpenTimestamps receipt covers.'
+    value: ${{ steps.verify.outputs.credential-sha256 }}
+  timestamp-status:
+    description: >-
+      "submitted" when a calendar accepted the digest, "unavailable" when
+      none were reachable. Never "confirmed" - that needs a Bitcoin block.
+    value: ${{ steps.verify.outputs.timestamp-status }}
+  ots-receipt:
+    description: >-
+      Base64 of the detached .ots file. Write it to disk and verify or
+      upgrade it with standard `ots` tooling.
+    value: ${{ steps.verify.outputs.ots-receipt }}
 
 runs:
   # Composite running a dependency-free Node script, deliberately, rather
