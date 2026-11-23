@@ -212,6 +212,35 @@ the inputs are not consulted. The finding is reported the same way whether or
 not it blocks; what the policy changes is only the conclusion, and the failure
 message names the file or input that asked for it.
 
+### Require it before merging
+
+A failing check only stops a merge when the repository requires that check.
+With the App installed, the check to require is the one it posts, named
+**REWORKIO Proof**:
+
+1. In the repository, open **Settings**, then **Rules**, then **Rulesets**,
+   and create or edit a branch ruleset for the branch you protect.
+2. Turn on **Require status checks to pass** and add the check
+   `REWORKIO Proof`.
+3. For its source, pick the App you installed
+   ([github.com/apps/rework-proof](https://github.com/apps/rework-proof)),
+   not "any source". GitHub then accepts that check only from the App, so a
+   workflow that posts a check with the same name cannot stand in for it.
+
+GitHub lists a check only after it has run on the repository at least once,
+so open one pull request first. A required check has to pass on the latest
+commit of the pull request.
+
+What this does and does not block: GitHub counts a successful, skipped or
+neutral check as passing. The check concludes with failure only when a policy
+above is switched on and not met; a pull request with unsigned commits and no
+policy concludes neutral, and merges. So requiring the check enforces exactly
+the policies in `.github/rework-proof.yml` and nothing else. GitHub's own
+pages on this:
+[available rules for rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets)
+and
+[troubleshooting required status checks](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks).
+
 ## Outputs
 
 | Output | Description |

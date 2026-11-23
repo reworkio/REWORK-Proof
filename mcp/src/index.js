@@ -33,10 +33,8 @@ const readJson = (name) => JSON.parse(fs.readFileSync(path.join(__dirname, name)
 // this now. package.json sits one level up from src/, inside the tarball.
 const SERVER_VERSION = readJson('../package.json').version;
 
-// Protocol revisions this server understands. The client's own revision is
-// echoed back when it appears here; otherwise the newest is offered and the
-// client decides whether it can proceed.
-const SUPPORTED_PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
+// Protocol revisions this server understands, newest first, read further
+// down from mcp-spec.json (SUPPORTED_PROTOCOLS and STATELESS_PROTOCOLS).
 const HTTP_TIMEOUT_MS = 15000;
 
 const log = (...a) => process.stderr.write(a.join(' ') + '\n');
@@ -51,6 +49,24 @@ const log = (...a) => process.stderr.write(a.join(' ') + '\n');
  * ceiling.
  */
 const ASSURANCE_SPEC = readJson('assurance.json');
+// The tools and the fixed sentences this server returns (see TOOLS below).
+const SPEC = readJson('mcp-spec.json');
+
+// Two eras of the protocol, both spoken here:
+//   handshake  the client sends `initialize` first; its revision is echoed
+//              when it is known, otherwise the newest is offered.
+//   stateless  (2026-07-28) no handshake. Every request names its revision
+//              and the client's capabilities in `params._meta`, every result
+//              says `resultType`, and `server/discover` answers what the
+//              handshake used to.
+// A request carrying the stateless `_meta` is served that way; anything else
+// is served as before.
+const SUPPORTED_PROTOCOLS = SPEC.protocols.handshake;
+const STATELESS_PROTOCOLS = SPEC.protocols.stateless;
+const META_VERSION = 'io.modelcontextprotocol/protocolVersion';
+const META_CLIENT_CAPABILITIES = 'io.modelcontextprotocol/clientCapabilities';
+const META_SERVER_INFO = 'io.modelcontextprotocol/serverInfo';
+const LIST_TTL_MS = 3600000;
 const ASSURANCE = ASSURANCE_SPEC.levels;
 
 /**
@@ -62,94 +78,27 @@ const ASSURANCE = ASSURANCE_SPEC.levels;
  */
 const AI_TRAILERS = readJson('ai-trailers.json');
 const AI_DECLARATION = {
-  reads: 'Commit messages only: a Co-authored-by trailer naming one of the tools below, a '
-    + 'Claude-Session or Amp-Thread-ID trailer, or a "Generated with" line.',
+  reads: SPEC.ai_declaration.reads,
   tools: AI_TRAILERS.tools.map((t) => t.name),
-  zero_means: 'No commit message declared a tool. It does not mean no tool was used; a '
-    + 'message with no trailer looks the same either way.',
-  declared_means: 'The author chose to say so. It is reported as a fact and never lowers a result.',
+  zero_means: SPEC.ai_declaration.zero_means,
+  declared_means: SPEC.ai_declaration.declared_means,
 };
 
-const CREDENTIAL_TYPES = {
-  REWORKWorkflowAttestation: 'A CI run whose repository identity GitHub attested via OIDC.',
-  REWORKHfJoinedPublication: 'A Hugging Face publication joined to the CI run that preceded it, confirmed by REWORK\'s own read of the Hub.',
-  REWORKProofOfWorkCredential: 'A submitted piece of work that passed REWORK verification.',
-  REWORKVideoProvenanceReceipt: 'A reviewed demonstration video, fingerprinted against reuse.',
-  REWORKReputationPassport: "A holder's full verified history in one signed credential.",
-  REWORKReputationSummary: 'A summary of already-public verified facts about a holder.',
-};
+const CREDENTIAL_TYPES = SPEC.credential_types;
 
 // ── tools ──────────────────────────────────────────────────────────────────
 
-const TOOLS = [
-  {
-    name: 'verify_rework_credential',
-    description:
-      'Check whether a REWORK Verifiable Credential (a VC-JWT) is authentic, and '
-      + 'report what it claims. Use this when someone presents a credential as '
-      + 'evidence that they produced a piece of work. Returns whether the signature '
-      + 'is valid, who issued it, and the credential subject.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        credential: {
-          type: 'string',
-          description: 'The compact VC-JWT, three base64url segments separated by dots.',
-        },
-      },
-      required: ['credential'],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'get_rework_issuer_keys',
-    description:
-      "Fetch REWORK's public signing keys (JWKS). Use this to verify a credential "
-      + 'offline yourself instead of trusting this server, or to confirm the issuer '
-      + 'key a credential names actually belongs to REWORK.',
-    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-  },
-  {
-    name: 'explain_rework_assurance',
-    description:
-      'Explain what a REWORK assurance level or credential type proves, and what it '
-      + 'explicitly does not prove. Use this before relying on a credential, so a '
-      + 'weak claim is not read as a strong one.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        assurance: {
-          type: 'string',
-          description: 'Assurance level, e.g. "workflow-identity". Omit to list all.',
-        },
-      },
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'lookup_rework_attestation',
-    description:
-      'Check whether REWORK actually ISSUED a credential - not just whether its '
-      + 'signature verifies. A forged-but-well-formed token fails this; a real one '
-      + 'returns its issuance record and the CURRENT OpenTimestamps receipt, which '
-      + 'may have been upgraded to a Bitcoin confirmation since issue. Pass the '
-      + 'credential (its sha256 is the lookup key) or the digest directly.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        credential: {
-          type: 'string',
-          description: 'The VC-JWT. Hashed locally; never sent anywhere.',
-        },
-        digest: {
-          type: 'string',
-          description: 'sha256 hex of the credential, if you already have it.',
-        },
-      },
-      additionalProperties: false,
-    },
-  },
-];
+/**
+ * The tools, from `mcp-spec.json`: one definition for this server and for the
+ * hosted one REWORK runs (the Claude directory lists a server by URL, and it
+ * requires each tool to carry a title and a read-only or destructive hint).
+ * Every tool here only reads, so each carries readOnlyHint.
+ */
+const TOOLS = SPEC.tools.map((t) => JSON.parse(JSON.stringify(t)));
+// Here the lookup hashes the credential in this process, which is a stronger
+// promise than the shared wording makes, so this server says so.
+TOOLS.find((t) => t.name === 'lookup_rework_attestation').inputSchema.properties.credential.description =
+  'The VC-JWT. Hashed locally; never sent anywhere.';
 
 async function http(path, { method = 'GET', body } = {}) {
   const ctl = new AbortController();
@@ -174,23 +123,31 @@ async function http(path, { method = 'GET', body } = {}) {
 async function callTool(name, args) {
   if (name === 'verify_rework_credential') {
     const credential = (args && args.credential) || '';
-    if (!credential.trim()) throw new Error('credential is required');
+    if (!credential.trim()) throw new Error(SPEC.errors.credential_required);
     const res = await http('/proofs/credentials/verify', {
       method: 'POST',
       body: { credential },
     });
     const subject = res.credential_subject || {};
     const assurance = subject.assurance;
+    // The API checks the signature, the expiry, and whether REWORK has since
+    // revoked the credential. `revoked` is true, false, or null (nothing to
+    // check, or it could not be read); a server that predates the check
+    // sends nothing, which is null too.
+    const revoked = typeof res.revoked === 'boolean' ? res.revoked : null;
+    let note;
+    if (revoked === true) note = SPEC.notes.revoked;
+    else if (assurance && ASSURANCE[assurance]) note = ASSURANCE[assurance].does_not_mean;
+    else note = SPEC.notes.unknown_assurance;
     return {
       valid: res.valid === true,
       reason: res.reason || null,
+      revoked,
       issuer: res.issuer || null,
       credential_subject: subject,
       // An agent that only reads `valid` would treat every credential as
       // equally strong. Ship the ceiling alongside the verdict.
-      assurance_note: assurance && ASSURANCE[assurance]
-        ? ASSURANCE[assurance].does_not_mean
-        : 'Assurance level not recognised — do not assume this proves more than it states.',
+      assurance_note: note,
     };
   }
 
@@ -222,28 +179,21 @@ async function callTool(name, args) {
       digest = crypto.createHash('sha256').update(args.credential, 'utf8').digest('hex');
     }
     if (!digest || !/^[0-9a-f]{64}$/.test(String(digest).toLowerCase())) {
-      throw new Error('pass either `credential` (the VC-JWT) or `digest` (64 hex chars)');
+      throw new Error(SPEC.errors.digest_required);
     }
     digest = String(digest).toLowerCase();
     try {
       const record = await http(`/github-app/attestations/${digest}`);
       return {
         ...record,
-        assurance_note:
-          'Issuance confirms REWORK signed a credential with this digest. It is '
-          + 'still not a review of the code or a claim the work is any good - '
-          + 'and a "submitted" timestamp is a calendar promise, only "confirmed" '
-          + 'means anchored in Bitcoin.',
+        assurance_note: SPEC.notes.issued,
       };
     } catch (err) {
       if (String(err.message).includes('REWORK API 404')) {
         return {
           issued: false,
           digest_sha256: digest,
-          assurance_note:
-            'REWORK has no record of issuing a credential with this digest. A '
-            + 'valid signature with no issuance record deserves suspicion: it '
-            + 'could predate the registry, or it could be a key compromise.',
+          assurance_note: SPEC.notes.not_issued,
         };
       }
       throw err;
@@ -260,10 +210,78 @@ function send(msg) {
 }
 
 function result(id, value) { send({ jsonrpc: '2.0', id, result: value }); }
-function failure(id, code, message) { send({ jsonrpc: '2.0', id, error: { code, message } }); }
+function failure(id, code, message, data) {
+  const error = data === undefined ? { code, message } : { code, message, data };
+  send({ jsonrpc: '2.0', id, error });
+}
+
+const serverInfo = () => ({
+  name: SPEC.server.name, title: SPEC.server.title, version: SERVER_VERSION, description: SPEC.server.description,
+});
+
+const TOOL_NAMES = new Set(TOOLS.map((t) => t.name));
+
+/** A request of the stateless era: answered whole, with no handshake before it. */
+async function handleStateless(msg, meta) {
+  const { id, method, params } = msg;
+  if (id === undefined || id === null) return undefined;
+  const requested = meta[META_VERSION];
+  if (!STATELESS_PROTOCOLS.includes(requested)) {
+    return failure(id, -32022, 'Unsupported protocol version',
+      { supported: [...STATELESS_PROTOCOLS, ...SUPPORTED_PROTOCOLS], requested });
+  }
+  const caps = meta[META_CLIENT_CAPABILITIES];
+  if (!caps || typeof caps !== 'object' || Array.isArray(caps)) {
+    return failure(id, -32602, `Invalid params: params._meta must carry ${META_CLIENT_CAPABILITIES} (an object, which may be empty)`);
+  }
+  if (method === 'server/discover') {
+    return result(id, {
+      resultType: 'complete',
+      supportedVersions: [...STATELESS_PROTOCOLS, ...SUPPORTED_PROTOCOLS],
+      capabilities: { tools: {} },
+      instructions: SPEC.server.instructions,
+      ttlMs: LIST_TTL_MS,
+      cacheScope: 'public',
+      _meta: { [META_SERVER_INFO]: serverInfo() },
+    });
+  }
+  if (method === 'tools/list') {
+    return result(id, { resultType: 'complete', tools: TOOLS, ttlMs: LIST_TTL_MS, cacheScope: 'public' });
+  }
+  if (method === 'tools/call') {
+    const name = params && params.name;
+    const args = params && params.arguments;
+    // No such tool, or arguments that are not an object: the request is
+    // malformed, a protocol error. What is wrong inside the arguments is the
+    // tool's to report, as a result the model can read.
+    if (typeof name !== 'string' || !TOOL_NAMES.has(name)) return failure(id, -32602, `Unknown tool: ${name}`);
+    if (args !== undefined && args !== null && (typeof args !== 'object' || Array.isArray(args))) {
+      return failure(id, -32602, 'Invalid params: arguments must be an object');
+    }
+    try {
+      const out = await callTool(name, args || {});
+      return result(id, {
+        resultType: 'complete',
+        content: [{ type: 'text', text: JSON.stringify(out, null, 2) }],
+        structuredContent: out,
+        isError: false,
+      });
+    } catch (err) {
+      return result(id, {
+        resultType: 'complete',
+        content: [{ type: 'text', text: `Tool ${name} failed: ${err.message}` }],
+        isError: true,
+      });
+    }
+  }
+  return failure(id, -32601, `Method not found: ${method}`);
+}
 
 async function handle(msg) {
   const { id, method, params } = msg;
+
+  const meta = params && params._meta && typeof params._meta === 'object' ? params._meta : null;
+  if (meta && META_VERSION in meta) return handleStateless(msg, meta);
 
   // A notification has no id and must never be answered - replying to one is
   // a protocol violation the client reports as an unsolicited response.
@@ -274,7 +292,8 @@ async function handle(msg) {
     return result(id, {
       protocolVersion: SUPPORTED_PROTOCOLS.includes(asked) ? asked : SUPPORTED_PROTOCOLS[0],
       capabilities: { tools: { listChanged: false } },
-      serverInfo: { name: 'rework-proof', version: SERVER_VERSION },
+      serverInfo: serverInfo(),
+      instructions: SPEC.server.instructions,
     });
   }
 
@@ -289,8 +308,12 @@ async function handle(msg) {
     const name = params && params.name;
     try {
       const out = await callTool(name, (params && params.arguments) || {});
+      // The same answer twice: as data a client can read field by field
+      // (each tool declares its outputSchema), and as text for a client that
+      // only reads text.
       return result(id, {
         content: [{ type: 'text', text: JSON.stringify(out, null, 2) }],
+        structuredContent: out,
         isError: false,
       });
     } catch (err) {
@@ -308,6 +331,7 @@ async function handle(msg) {
 }
 
 let buffer = '';
+const inFlight = new Set();
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => {
   buffer += chunk;
@@ -323,14 +347,21 @@ process.stdin.on('data', (chunk) => {
       log(`dropping unparseable frame: ${err.message}`);
       continue;
     }
-    Promise.resolve(handle(msg)).catch((err) => {
+    const work = Promise.resolve(handle(msg)).catch((err) => {
       log(`handler error: ${err.stack || err.message}`);
       if (msg && msg.id !== undefined && msg.id !== null) {
         failure(msg.id, -32603, `Internal error: ${err.message}`);
       }
     });
+    inFlight.add(work);
+    work.finally(() => inFlight.delete(work));
   }
 });
 
-process.stdin.on('end', () => process.exit(0));
+// When the client closes its end, answer what it already asked before
+// leaving. Exiting at once dropped any tool call still waiting on the
+// network, so a client that sent a call and then closed got no answer.
+process.stdin.on('end', () => {
+  Promise.allSettled([...inFlight]).then(() => process.exit(0));
+});
 log(`rework-proof MCP server ready (api=${API})`);

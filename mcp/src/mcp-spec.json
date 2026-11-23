@@ -1,0 +1,242 @@
+{
+  "_comment": "The REWORK Proof MCP server's tools and the fixed sentences it returns, in one file. Two servers read it: this package (stdio, index.js beside this file) and the hosted server REWORK runs at https://api.reworkdigital.io/mcp, so neither can describe a tool, or the ceiling on a claim, differently from the other. Every tool only reads: readOnlyHint is true on all of them.",
+  "server": {
+    "name": "rework-proof",
+    "title": "REWORK Proof",
+    "description": "Check whether delivered work is genuinely the author's: verify a REWORK credential, see whether it was revoked or ever issued, and read what it does and does not prove.",
+    "instructions": "Read `assurance_note` with every result: it states the ceiling on what the result proves. A valid signature is not a review of the work."
+  },
+  "protocols": {
+    "_comment": "Revisions of the Model Context Protocol this server speaks, newest first. `handshake` revisions begin with `initialize`. `stateless` revisions have no handshake: every request names its revision in `params._meta`.",
+    "handshake": [
+      "2025-11-25",
+      "2025-06-18",
+      "2025-03-26",
+      "2024-11-05"
+    ],
+    "stateless": [
+      "2026-07-28"
+    ]
+  },
+  "tools": [
+    {
+      "name": "verify_rework_credential",
+      "title": "Verify a REWORK credential",
+      "description": "Check whether a REWORK Verifiable Credential (a VC-JWT) is authentic, and report what it claims. Use this when someone presents a credential as evidence that they produced a piece of work. Returns whether the signature is valid, whether REWORK has since revoked it, who issued it, and the credential subject.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "credential": {
+            "type": "string",
+            "description": "The compact VC-JWT, three base64url segments separated by dots."
+          }
+        },
+        "required": [
+          "credential"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "description": "True only when the signature verifies against REWORK's key, the credential has not expired, and REWORK has not revoked it."
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why the credential is not valid; null when it is."
+          },
+          "revoked": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "True when REWORK revoked the credential after issuing it; false when it was checked and stands; null when there is nothing to check (not a certificate credential, or not valid) or the status could not be read."
+          },
+          "issuer": {
+            "description": "Who issued the credential, as the credential states it; null when it is not valid."
+          },
+          "credential_subject": {
+            "type": "object",
+            "description": "What the credential claims. Empty when it is not valid."
+          },
+          "assurance_note": {
+            "type": "string",
+            "description": "The ceiling on what this result proves. Read it before relying on the result."
+          }
+        },
+        "required": [
+          "valid",
+          "reason",
+          "revoked",
+          "credential_subject",
+          "assurance_note"
+        ]
+      },
+      "annotations": {
+        "title": "Verify a REWORK credential",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "get_rework_issuer_keys",
+      "title": "Get REWORK's public signing keys",
+      "description": "Fetch REWORK's public signing keys (JWKS). Use this to verify a credential offline yourself instead of trusting this server, or to confirm the issuer key a credential names actually belongs to REWORK.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "REWORK's public signing keys, as a JSON Web Key Set."
+          }
+        },
+        "required": [
+          "keys"
+        ]
+      },
+      "annotations": {
+        "title": "Get REWORK's public signing keys",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "explain_rework_assurance",
+      "title": "Explain a REWORK assurance level",
+      "description": "Explain what a REWORK assurance level or credential type proves, and what it explicitly does not prove. Use this before relying on a credential, so a weak claim is not read as a strong one.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "assurance": {
+            "type": "string",
+            "description": "Assurance level, e.g. \"workflow-identity\". Omit to list all."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "description": "One level when `assurance` was given, every level otherwise, or `error` with the known levels when the level asked for does not exist.",
+        "properties": {
+          "assurance": {
+            "type": "string"
+          },
+          "assurance_levels": {
+            "type": "object"
+          },
+          "what_the_check_reads": {},
+          "ai_declaration": {
+            "type": "object"
+          },
+          "credential_types": {
+            "type": "object"
+          },
+          "error": {
+            "type": "string"
+          },
+          "known": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "annotations": {
+        "title": "Explain a REWORK assurance level",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "lookup_rework_attestation",
+      "title": "Look up whether REWORK issued a credential",
+      "description": "Check whether REWORK actually ISSUED a credential - not just whether its signature verifies. A forged-but-well-formed token fails this; a real one returns its issuance record and the CURRENT OpenTimestamps receipt, which may have been upgraded to a Bitcoin confirmation since issue. Pass the credential (its sha256 is the lookup key) or the digest directly.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "credential": {
+            "type": "string",
+            "description": "The VC-JWT. Only its sha256 digest is used as the lookup key; the credential itself is not stored."
+          },
+          "digest": {
+            "type": "string",
+            "description": "sha256 hex of the credential, if you already have it."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "issued": {
+            "type": "boolean",
+            "description": "Whether REWORK has a record of issuing a credential with this digest."
+          },
+          "digest_sha256": {
+            "type": "string"
+          },
+          "assurance_note": {
+            "type": "string",
+            "description": "The ceiling on what this result proves. Read it before relying on the result."
+          }
+        },
+        "required": [
+          "issued",
+          "digest_sha256",
+          "assurance_note"
+        ]
+      },
+      "annotations": {
+        "title": "Look up whether REWORK issued a credential",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      }
+    }
+  ],
+  "credential_types": {
+    "REWORKWorkflowAttestation": "A CI run whose repository identity GitHub attested via OIDC.",
+    "REWORKHfJoinedPublication": "A Hugging Face publication joined to the CI run that preceded it, confirmed by REWORK's own read of the Hub.",
+    "REWORKProofOfWorkCredential": "A submitted piece of work that passed REWORK verification.",
+    "REWORKVideoProvenanceReceipt": "A reviewed demonstration video, fingerprinted against reuse.",
+    "REWORKReputationPassport": "A holder's full verified history in one signed credential.",
+    "REWORKReputationSummary": "A summary of already-public verified facts about a holder."
+  },
+  "ai_declaration": {
+    "reads": "Commit messages only: a Co-authored-by, Assisted-by or Generated-by trailer naming one of the tools below; an Assisted-by trailer in the AGENT:MODEL form; a Claude-Session, Amp-Thread-ID or Replit-Commit-Author trailer; an `AI-assisted: true` line; or a \"Generated with\" line.",
+    "zero_means": "No commit message declared a tool. It does not mean no tool was used; a message with no trailer looks the same either way.",
+    "declared_means": "The author chose to say so. It is reported as a fact and never lowers a result."
+  },
+  "notes": {
+    "unknown_assurance": "Assurance level not recognised - do not assume this proves more than it states.",
+    "issued": "Issuance confirms REWORK signed a credential with this digest. It is still not a review of the code or a claim the work is any good - and a \"submitted\" timestamp is a calendar promise, only \"confirmed\" means anchored in Bitcoin.",
+    "not_issued": "REWORK has no record of issuing a credential with this digest. A valid signature with no issuance record deserves suspicion: it could predate the registry, or it could be a key compromise.",
+    "revoked": "REWORK revoked this credential after issuing it. Its signature still verifies, which is exactly why revocation has to be checked: do not rely on it.",
+    "revocation_unchecked": "Whether this credential has since been revoked could not be checked just now. The signature is valid; treat the result as incomplete."
+  },
+  "errors": {
+    "credential_required": "credential is required: pass the compact VC-JWT (three base64url segments separated by dots)",
+    "digest_required": "pass either `credential` (the VC-JWT) or `digest` (64 hex chars)"
+  }
+}

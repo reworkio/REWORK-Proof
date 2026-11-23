@@ -1,6 +1,6 @@
 {
-  "$comment": "The one definition of what counts as a DECLARED AI assistant in a commit message. Every runtime that reads commit messages for REWORK Proof loads this file and nothing else, so a commit reads the same from the Action, the App and the MCP server. Each `tools[].pattern` is a regular expression fragment written in the subset that JavaScript and Python evaluate identically: no lookbehind, no named groups, no flags inline. Matching is always case-insensitive. `patterns` are tried in order and the first hit is the verdict; `{{tools}}` expands to the alternation of every tool pattern. A match means the author DECLARED the tool in the message. No match means nothing was declared; it never means nothing was used.",
-  "version": 1,
+  "$comment": "The one definition of what counts as a DECLARED AI assistant in a commit message. Every runtime that reads commit messages for REWORK Proof loads this file and nothing else, so a commit reads the same from the Action, the App and the MCP server. Each `tools[].pattern` is a regular expression fragment written in the subset that JavaScript and Python evaluate identically: no lookbehind, no named groups, no flags inline. Matching is always case-insensitive. `patterns` are tried in order and the first hit is the verdict; `{{tools}}` expands to the alternation of every tool pattern. A match means the author DECLARED the tool in the message. No match means nothing was declared; it never means nothing was used. Version 2 (2026-11-23) adds more tools and the trailers that projects' own AI policies ask for (`Assisted-by:`, `Generated-by:`, `AI-assisted: true`). Each tool added then carries the `source` its trailer was read from; `observed` means the exact text was read there, `assumed` means it was seen only in passing or is inferred. A tool whose name is an ordinary word or a first name is matched on its address or bot login only, never on the name.",
+  "version": 2,
   "tools": [
     {
       "name": "Claude",
@@ -88,6 +88,171 @@
       "pattern": "\\bSWE-agent\\b",
       "example": "Co-authored-by: SWE-agent <swe-agent@example.invalid>",
       "evidence": "assumed"
+    },
+    {
+      "name": "OpenHands",
+      "pattern": "\\bOpenHands\\b|openhands@all-hands\\.dev",
+      "example": "Co-authored-by: openhands <openhands@all-hands.dev>",
+      "evidence": "observed",
+      "source": "https://github.com/OpenHands/OpenHands/blob/997618d3f26f7234a67fea2494949903dc87f597/src/services/settings.ts"
+    },
+    {
+      "name": "opencode",
+      "pattern": "noreply@opencode\\.ai|opencode-agent\\[bot\\]",
+      "example": "Co-authored-by: opencode <noreply@opencode.ai>",
+      "evidence": "observed",
+      "source": "https://github.com/numan-cli/numan/commit/bfc9f292767d953f551f43e94d579ee1ee0be6a5",
+      "note": "Read in public commits and a contributing guide; the CLI's own source showed no default trailer."
+    },
+    {
+      "name": "Crush",
+      "pattern": "crush@charm\\.land|\\bCrush:\\S",
+      "example": "Co-Authored-By: Crush <crush@charm.land>",
+      "evidence": "observed",
+      "source": "https://github.com/charmbracelet/crush/blob/main/internal/agent/tools/bash.md.tpl",
+      "note": "Crush is an ordinary word, so only its address or the `Crush:<model>` form counts. Its default is `Assisted-by: Crush:<model>` under a `Generated with Crush` line."
+    },
+    {
+      "name": "Qwen Code",
+      "pattern": "\\bQwen-Coder\\b|qwen-coder@alibabacloud\\.com",
+      "example": "Co-authored-by: Qwen-Coder <qwen-coder@alibabacloud.com>",
+      "evidence": "observed",
+      "source": "https://github.com/QwenLM/qwen-code/blob/56c15cf50286ff55f886d4375a46a362bef806d3/packages/core/src/tools/shell.test.ts"
+    },
+    {
+      "name": "Mistral Vibe",
+      "pattern": "\\bMistral Vibe\\b|vibe@mistral\\.ai",
+      "example": "Co-Authored-By: Mistral Vibe <vibe@mistral.ai>",
+      "evidence": "observed",
+      "source": "https://github.com/mistralai/mistral-vibe/blob/e76235b203b8965af584e88e69284bc704c31a1f/vibe/core/system_prompt.py"
+    },
+    {
+      "name": "Warp",
+      "pattern": "agent@warp\\.dev",
+      "example": "Co-Authored-By: Warp <agent@warp.dev>",
+      "evidence": "observed",
+      "source": "https://github.com/warpdotdev/warp/blob/4540015ee515700ddb539d7dc634febaec10b1fc/app/src/ai/agent_sdk/driver/git_credentials.rs",
+      "note": "Warp is an ordinary word; only the address counts."
+    },
+    {
+      "name": "Factory Droid",
+      "pattern": "factory-droid\\[bot\\]",
+      "example": "Co-authored-by: factory-droid[bot] <138933559+factory-droid[bot]@users.noreply.github.com>",
+      "evidence": "observed",
+      "source": "https://github.com/Factory-AI/factory/blob/ddd7d36e2577929ad1a2c1dc5b9ee04580325c3b/docs/guides/droid-exec/github-actions.mdx"
+    },
+    {
+      "name": "JetBrains Junie",
+      "pattern": "junie@jetbrains\\.com",
+      "example": "Co-authored-by: Junie <junie@jetbrains.com>",
+      "evidence": "observed",
+      "source": "https://github.com/JetBrains/MPS/blob/28d48a47f09e1d13265227389862ed541a21ae1d/.agents/git.md",
+      "note": "Junie is also a first name; only the address counts."
+    },
+    {
+      "name": "Replit Agent",
+      "pattern": "\\bReplit Agent\\b|agent@replit\\.com",
+      "example": "Co-authored-by: Replit Agent <agent@replit.com>",
+      "evidence": "observed",
+      "source": "https://github.com/founder24/-kalukaliya/commit/b030f37a539e8b7a1fef66b0c4e1658bd7a87e61"
+    },
+    {
+      "name": "Lovable",
+      "pattern": "lovable-dev\\[bot\\]|gpt-engineer-app\\[bot\\]",
+      "example": "Co-authored-by: lovable-dev[bot]",
+      "evidence": "assumed",
+      "source": "https://docs.lovable.dev",
+      "note": "Lovable's documentation (its GitHub page) names these bot logins as the commit AUTHOR; a co-author line carrying one is assumed, not observed."
+    },
+    {
+      "name": "v0",
+      "pattern": "it\\+v0agent@vercel\\.com",
+      "example": "Co-authored-by: v0 <it+v0agent@vercel.com>",
+      "evidence": "observed",
+      "source": "https://github.com/vercel-labs/vgpu/commit/c290dd32453642eee629db74665d9705bd9664c2",
+      "note": "`v0` reads as a version number; only the address counts."
+    },
+    {
+      "name": "Amazon Q Developer",
+      "pattern": "amazon-q-developer\\[bot\\]",
+      "example": "Co-authored-by: amazon-q-developer[bot] <208079219+amazon-q-developer[bot]@users.noreply.github.com>",
+      "evidence": "observed",
+      "source": "https://github.com/CyanAutomation/motioninocean/commit/785ab4d34b62a2c589e1280c4a5f66f4f7457325"
+    },
+    {
+      "name": "Kilo Code",
+      "pattern": "\\bKilo Code\\b|kilo-code-bot\\[bot\\]|kilo-code@users\\.noreply\\.github\\.com",
+      "example": "Co-authored-by: kilo-code-bot[bot] <240665456+kilo-code-bot[bot]@users.noreply.github.com>",
+      "evidence": "observed",
+      "source": "https://github.com/Jonathan-Harris1975/AIMS/commit/bcd15d51308504721777ad5566d0909560ab77b5"
+    },
+    {
+      "name": "Goose",
+      "pattern": "\\bGoose\\s*<opensource@block\\.xyz>",
+      "example": "Co-authored-by: Goose <opensource@block.xyz>",
+      "evidence": "observed",
+      "source": "https://github.com/block/ghost/commit/c55888ea181aeef7b4f5bd2af85129239986702f",
+      "note": "Goose is an ordinary word and the address is Block's general open-source one, so the two have to appear together."
+    },
+    {
+      "name": "Trae",
+      "pattern": "\\bTRAE CLI\\b|traecli@bytedance\\.com",
+      "example": "Co-authored-by: TRAE CLI <traecli@bytedance.com>",
+      "evidence": "observed",
+      "source": "https://github.com/volcengine/OpenViking/commit/55c531e2e84ff681095fb69cdbb76fb6ce613c62"
+    },
+    {
+      "name": "Rovo Dev",
+      "pattern": "\\bRovo Dev\\b|rovo-dev@atlassian\\.com",
+      "example": "Co-authored-by: Rovo Dev <rovo-dev@atlassian.com>",
+      "evidence": "observed",
+      "source": "https://github.com/dkds/spring-security-lab/commit/d340fbacffc1351be20f11c80e9de73c0ab018f6"
+    },
+    {
+      "name": "Codegen",
+      "pattern": "codegen-sh\\[bot\\]",
+      "example": "Co-authored-by: codegen-sh[bot] <131295404+codegen-sh[bot]@users.noreply.github.com>",
+      "evidence": "observed",
+      "source": "https://github.com/evgenygurin/codegen-bridge/commit/c94a55a728307c9f29adce84f2159bfdeb9caced"
+    },
+    {
+      "name": "Sweep AI",
+      "pattern": "sweep-ai\\[bot\\]",
+      "example": "Co-authored-by: sweep-ai[bot] <128439645+sweep-ai[bot]@users.noreply.github.com>",
+      "evidence": "observed",
+      "source": "https://github.com/Aaqibhafeezkhan/polyglot-utilities-toolkit/commit/ee49f14a70d2cceda4a53bd8b721f277e4dbef62",
+      "note": "An unrelated `Sweep Bot` account exists; only the `sweep-ai[bot]` login counts."
+    },
+    {
+      "name": "Tembo",
+      "pattern": "tembo(?:-io)?\\[bot\\]",
+      "example": "Co-authored-by: tembo[bot] <208362400+tembo[bot]@users.noreply.github.com>",
+      "evidence": "observed",
+      "source": "https://github.com/solidjs/solid/commit/88581892b67aa2cadd0d116f17677601d4ff5009"
+    },
+    {
+      "name": "Kimi",
+      "pattern": "noreply@moonshot\\.cn",
+      "example": "Co-Authored-By: Kimi <noreply@moonshot.cn>",
+      "evidence": "assumed",
+      "source": "https://github.com/ShaulLavo/bun-wasm/commit/3c8080b84a04222c9bec0afcee0ba57ae1a1588f",
+      "note": "Seen in commit search results, not confirmed as the tool's default. Kimi is also a first name; only the address counts."
+    },
+    {
+      "name": "Grok",
+      "pattern": "noreply@x\\.ai",
+      "example": "Co-Authored-By: Grok 4.7 <noreply@x.ai>",
+      "evidence": "assumed",
+      "source": "https://github.com/OpenSesame-Labs/OpenSesame/commit/133eb7f76e7000eb0d60f3b5afe1d6c9234ea7b7",
+      "note": "Seen in commit search results, not confirmed as the tool's default; only the address counts."
+    },
+    {
+      "name": "Antigravity",
+      "pattern": "antigravity@google\\.com",
+      "example": "Co-authored-by: Antigravity <antigravity@google.com>",
+      "evidence": "assumed",
+      "source": "https://github.com/vorlie/kioku/commit/ba1b2dfeece54f415fe3e8cdb3407741af688698",
+      "note": "Read in one public commit, which may have been written by hand."
     }
   ],
   "patterns": [
@@ -115,6 +280,36 @@
       "id": "robot-generated",
       "what": "The robot-emoji form, `🤖 Generated ...`, which some tools write without naming themselves on the same line.",
       "regex": "🤖\\s*Generated"
+    },
+    {
+      "id": "assisted-by",
+      "what": "An `Assisted-by:` trailer naming one of the tools above. The trailer several projects' AI policies ask for (LLVM, OpenStack, OpenInfra, OpenSSL).",
+      "regex": "(?:^|\\n)[ \\t]*Assisted-by:[^\\n]*?(?:{{tools}})"
+    },
+    {
+      "id": "assisted-by-agent-model",
+      "what": "An `Assisted-by:` trailer in the `AGENT:MODEL` form (`Assisted-by: my-agent:my-model-v1`), whatever the agent is called. That form is what the Linux kernel's 7.0 and 7.1 documentation and OpenSSL's policy specify, and a person's name is not written that way. A link (`https://...`) is not an agent.",
+      "regex": "(?:^|\\n)[ \\t]*Assisted-by:[ \\t]*[^\\s:<]+:(?!//)[^\\s<]+"
+    },
+    {
+      "id": "generated-by",
+      "what": "A `Generated-by:` trailer naming one of the tools above (the Apache Software Foundation's and OpenStack's form).",
+      "regex": "(?:^|\\n)[ \\t]*Generated-by:[^\\n]*?(?:{{tools}})"
+    },
+    {
+      "id": "ai-assisted-true",
+      "what": "The line `AI-assisted: true` (or `yes`), which some projects write beside a co-author line. `AI-Assisted: none` is the opposite statement and never matches.",
+      "regex": "(?:^|\\n)[ \\t]*AI-assisted:[ \\t]*(?:true|yes)\\b"
+    },
+    {
+      "id": "replit-commit-author",
+      "what": "The `Replit-Commit-Author: Agent` trailer Replit writes on commits its agent makes.",
+      "regex": "(?:^|\\n)[ \\t]*Replit-Commit-Author:[ \\t]*Agent\\b"
+    },
+    {
+      "id": "crush-generated",
+      "what": "The `Generated with Crush` line Crush writes above its `Assisted-by:` trailer.",
+      "regex": "💘\\s*Generated\\s+with\\s+Crush\\b"
     }
   ]
 }

@@ -22,6 +22,34 @@ does **not** claim.
 
 No API key. No account. Every tool here reads public endpoints.
 
+### Or use the hosted server
+
+The same four tools are served at a URL, for clients that take a remote
+server (Claude's connectors, for one) and for anyone who would rather not
+install anything:
+
+```
+https://api.reworkdigital.io/mcp
+```
+
+It speaks MCP's Streamable HTTP transport: POST one JSON-RPC message, get one
+JSON response. No login, no session, no cookies. To see the tools it offers:
+
+```bash
+curl -s https://api.reworkdigital.io/mcp -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+Both servers read their tools from the same file,
+[`src/mcp-spec.json`](src/mcp-spec.json), so a tool is described the same way
+whichever one you use. One difference is worth knowing. With this package,
+`lookup_rework_attestation` hashes the credential on your machine and sends
+only the digest. With the hosted server the credential travels to REWORK,
+which hashes it there and stores nothing; pass `digest` yourself if you would
+rather it never left.
+
+Every tool only reads, and each one says so (`readOnlyHint`), so a client can
+run them without asking each time.
+
 ## Tools
 
 | Tool | What it does |
