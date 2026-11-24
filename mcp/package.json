@@ -1,6 +1,6 @@
 {
   "name": "@reworkdigital.io/rework-proof-mcp",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "mcpName": "io.github.reworkio/rework-proof",
   "description": "MCP server for verifying REWORK credentials — check whether delivered work is genuinely the author's.",
   "license": "MIT",

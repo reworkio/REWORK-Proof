@@ -3,7 +3,7 @@
   "server": {
     "name": "rework-proof",
     "title": "REWORK Proof",
-    "description": "Check whether delivered work is genuinely the author's: verify a REWORK credential, see whether it was revoked or ever issued, and read what it does and does not prove.",
+    "description": "Check whether delivered work is genuinely the author's: verify a REWORK credential or certificate, see whether it was revoked or ever issued, and read what it does and does not prove.",
     "instructions": "Read `assurance_note` with every result: it states the ceiling on what the result proves. A valid signature is not a review of the work."
   },
   "protocols": {
@@ -276,6 +276,94 @@
         "idempotentHint": true,
         "openWorldHint": true
       }
+    },
+    {
+      "name": "check_rework_certificate",
+      "title": "Check a REWORK certificate by ID or link",
+      "description": "Check a REWORK certificate from its ID or its link, which is what people usually share: whether REWORK holds it, whether it is active or revoked, and what its public page shows (holder, title, issue date, verified proofs and skills, and a verified result when there is one). Use this when you are given a certificate ID (such as RW-CERT-...) or a link to /verify/... or /certificates/share/....",
+      "annotations": {
+        "title": "Check a REWORK certificate by ID or link",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "certificate": {
+            "type": "string",
+            "description": "A certificate ID, or a link to a REWORK certificate page (/verify/<id> or /certificates/share/<token>)."
+          }
+        },
+        "required": [
+          "certificate"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether REWORK holds a certificate under this ID or link. Null when the records could not be read just now."
+          },
+          "active": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the certificate is active. Null when unknown."
+          },
+          "revoked": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether REWORK revoked it. Null when unknown."
+          },
+          "certificate_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The certificate's status as REWORK records it."
+          },
+          "verify_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The certificate's public page."
+          },
+          "certificate": {
+            "type": "object",
+            "description": "What the public page shows, for an active certificate only: holder, title, issued_at, verified_proofs, verified_skills, and verified_result when there is one."
+          },
+          "assurance_note": {
+            "type": "string",
+            "description": "The ceiling on what this result proves. Read it before relying on the result."
+          }
+        },
+        "required": [
+          "found",
+          "active",
+          "revoked",
+          "certificate_id",
+          "status",
+          "verify_url",
+          "assurance_note"
+        ]
+      }
     }
   ],
   "credential_types": {
@@ -301,11 +389,18 @@
     "no_assurance_level": "This type of credential carries no assurance level. A valid signature shows REWORK issued it and that it has not been altered; it is not a review of how good the work is.",
     "registry_not_kept": "REWORK keeps no per-digest record for this type of credential: it is signed afresh each time it is downloaded, so no two copies share a digest, and this lookup can neither confirm nor deny it. That is not a sign of forgery. Check its signature with verify_rework_credential; what the credential says about itself here is unverified until then.",
     "registry_newest_only": "REWORK keeps a record of only the newest repository-control challenge for each person and repository: starting the ceremony again replaces it. An older challenge missing here is not a sign of forgery. Check its signature and expiry with verify_rework_credential; what the credential says about itself here is unverified until then.",
-    "claim_not_current": "REWORK issued this challenge, but the claim it belongs to is now {status}: it does not show control of the repository today."
+    "claim_not_current": "REWORK issued this challenge, but the claim it belongs to is now {status}: it does not show control of the repository today.",
+    "certificate_active": "This is REWORK's current record of the certificate, as its public page shows it: a reviewer verified the work it lists. It is not a review of how good the work is, and a certificate can be revoked later, so check again before relying on it.",
+    "certificate_revoked": "REWORK revoked this certificate. Do not rely on it, or on any credential issued for it.",
+    "certificate_inactive": "REWORK holds this certificate, but it is not active, so its public page does not show it. Do not rely on it as it stands.",
+    "certificate_not_found": "REWORK holds no certificate under that ID or link. Check it was copied in full: this lookup cannot tell a mistyped ID from one that never existed.",
+    "certificate_unreadable": "REWORK's records could not be read just now, so nothing is known about this certificate either way. Try again shortly."
   },
   "errors": {
     "credential_required": "credential is required: pass the compact VC-JWT (three base64url segments separated by dots)",
-    "digest_required": "pass either `credential` (the VC-JWT) or `digest` (64 hex chars)"
+    "digest_required": "pass either `credential` (the VC-JWT) or `digest` (64 hex chars)",
+    "certificate_required": "certificate is required: pass a certificate ID (such as RW-CERT-...) or a link to a REWORK certificate page",
+    "certificate_unrecognised": "That is not a certificate ID or a REWORK certificate link. Pass the ID printed on the certificate, or its link (/verify/<id> or /certificates/share/<token>)."
   },
   "site": "https://reworkio.com",
   "registry": {

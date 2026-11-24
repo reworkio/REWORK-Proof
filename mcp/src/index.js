@@ -174,7 +174,53 @@ async function certificateRecord(id) {
   }
 }
 
+/**
+ * The tool's answer from REWORK's record of a certificate, with the note that
+ * fits it. The hosted server builds the same answer from the same record
+ * (certificate_answer in its Python); a test compares the two.
+ */
+function certificateAnswer(record) {
+  const r = record && typeof record === 'object' ? record : {};
+  const flag = (v) => (typeof v === 'boolean' ? v : null);
+  const text = (v) => (typeof v === 'string' ? v : null);
+  const out = {
+    found: flag(r.found),
+    active: flag(r.active),
+    revoked: flag(r.revoked),
+    certificate_id: text(r.certificate_id),
+    status: text(r.status),
+    verify_url: text(r.verify_url),
+  };
+  if (out.found === true && out.active === true && r.certificate && typeof r.certificate === 'object' && !Array.isArray(r.certificate)) {
+    out.certificate = r.certificate;
+  }
+  let note;
+  if (out.found === null) note = SPEC.notes.certificate_unreadable;
+  else if (out.found === false) note = SPEC.notes.certificate_not_found;
+  else if (out.revoked === true) note = SPEC.notes.certificate_revoked;
+  else if (out.active === true) note = SPEC.notes.certificate_active;
+  else note = SPEC.notes.certificate_inactive;
+  out.assurance_note = note;
+  return out;
+}
+
 async function callTool(name, args) {
+  if (name === 'check_rework_certificate') {
+    const ref = typeof (args && args.certificate) === 'string' ? args.certificate.trim() : '';
+    if (!ref) throw new Error(SPEC.errors.certificate_required);
+    // REWORK reads the certificate the ID or link names; only that text is
+    // sent, and it is already public on the certificate's own page.
+    let record;
+    try {
+      record = await http(`/proofs/certificates/check?ref=${encodeURIComponent(ref)}`);
+    } catch (err) {
+      if (/REWORK API (400|422)\b/.test(String(err.message))) throw new Error(SPEC.errors.certificate_unrecognised);
+      log(`certificate check failed: ${err.message}`);
+      record = {};
+    }
+    return certificateAnswer(record);
+  }
+
   if (name === 'verify_rework_credential') {
     const credential = (args && args.credential) || '';
     if (!credential.trim()) throw new Error(SPEC.errors.credential_required);
