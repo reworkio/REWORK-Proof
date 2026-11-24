@@ -53,6 +53,12 @@ issuance record for it. Handed one, the lookup says so instead of "not
 issued", and looks up the certificate it names: only that certificate's id is
 sent, and the id is already public on the certificate's own page.
 
+The lookup reads every record REWORK keeps by digest: workflow attestations,
+Hugging Face joins, and Hugging Face repository-control challenges. REWORK
+keeps only the newest challenge for each person and repository, so an older
+one is answered as "no record kept" rather than "not issued". A challenge that
+is found says what its claim's state is now; only `verified` shows control.
+
 Every tool only reads, and each one says so (`readOnlyHint`), so a client can
 run them without asking each time.
 

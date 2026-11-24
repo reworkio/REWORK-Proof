@@ -177,7 +177,7 @@
     {
       "name": "lookup_rework_attestation",
       "title": "Look up whether REWORK issued a credential",
-      "description": "Check whether REWORK actually ISSUED a credential - not just whether its signature verifies. A forged-but-well-formed token fails this; a real one returns its issuance record and the CURRENT OpenTimestamps receipt, which may have been upgraded to a Bitcoin confirmation since issue. Pass the credential (its sha256 is the lookup key) or the digest directly. Certificate, video-receipt and passport credentials are signed afresh on every download and have no issuance record: pass the credential itself (not its digest) and the answer says so, with the certificate it names looked up instead.",
+      "description": "Check whether REWORK actually ISSUED a credential - not just whether its signature verifies. A forged-but-well-formed token fails this; a real one returns its issuance record and the CURRENT OpenTimestamps receipt, which may have been upgraded to a Bitcoin confirmation since issue. Pass the credential (its sha256 is the lookup key) or the digest directly. Workflow attestations and Hugging Face credentials are recorded. Certificate, video-receipt and passport credentials are signed afresh on every download and have no issuance record: pass the credential itself (not its digest) and the answer says so, with the certificate it names looked up instead.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -211,7 +211,7 @@
           },
           "credential_type": {
             "type": "string",
-            "description": "Present when the answer depends on the kind of credential: the kind it states, unverified."
+            "description": "The kind of credential: from REWORK's record when one was found, otherwise as the credential states it (unverified)."
           },
           "certificate": {
             "type": "object",
@@ -245,6 +245,22 @@
               "revoked",
               "verify_url"
             ]
+          },
+          "github": {
+            "type": "object",
+            "description": "For a Hugging Face join: the GitHub Actions run, as REWORK recorded it."
+          },
+          "huggingface": {
+            "type": "object",
+            "description": "For a Hugging Face credential: the repository (and for a join, the exact content state) REWORK recorded."
+          },
+          "claim": {
+            "type": "object",
+            "description": "For a repository-control challenge: the claim's state now (status, verdict, lease). Only a status of verified shows control today."
+          },
+          "timestamp": {
+            "type": "object",
+            "description": "The OpenTimestamps receipt as REWORK holds it now. Only a status of confirmed is anchored in Bitcoin."
           }
         },
         "required": [
@@ -265,6 +281,7 @@
   "credential_types": {
     "REWORKWorkflowAttestation": "A CI run whose repository identity GitHub attested via OIDC.",
     "REWORKHfJoinedPublication": "A Hugging Face publication joined to the CI run that preceded it, confirmed by REWORK's own read of the Hub.",
+    "REWORKHfRepoControl": "A challenge REWORK issued to prove write control of a Hugging Face repository. It shows control only while REWORK holds the claim as verified.",
     "REWORKProofOfWorkCredential": "A submitted piece of work that passed REWORK verification.",
     "REWORKVideoProvenanceReceipt": "A reviewed demonstration video, fingerprinted against reuse.",
     "REWORKReputationPassport": "A holder's full verified history in one signed credential.",
@@ -282,7 +299,9 @@
     "revoked": "REWORK revoked this credential after issuing it. Its signature still verifies, which is exactly why revocation has to be checked: do not rely on it.",
     "revocation_unchecked": "Whether this credential has since been revoked could not be checked just now. The signature is valid; treat the result as incomplete.",
     "no_assurance_level": "This type of credential carries no assurance level. A valid signature shows REWORK issued it and that it has not been altered; it is not a review of how good the work is.",
-    "registry_not_kept": "REWORK keeps no per-digest record for this type of credential: it is signed afresh each time it is downloaded, so no two copies share a digest, and this lookup can neither confirm nor deny it. That is not a sign of forgery. Check its signature with verify_rework_credential; what the credential says about itself here is unverified until then."
+    "registry_not_kept": "REWORK keeps no per-digest record for this type of credential: it is signed afresh each time it is downloaded, so no two copies share a digest, and this lookup can neither confirm nor deny it. That is not a sign of forgery. Check its signature with verify_rework_credential; what the credential says about itself here is unverified until then.",
+    "registry_newest_only": "REWORK keeps a record of only the newest repository-control challenge for each person and repository: starting the ceremony again replaces it. An older challenge missing here is not a sign of forgery. Check its signature and expiry with verify_rework_credential; what the credential says about itself here is unverified until then.",
+    "claim_not_current": "REWORK issued this challenge, but the claim it belongs to is now {status}: it does not show control of the repository today."
   },
   "errors": {
     "credential_required": "credential is required: pass the compact VC-JWT (three base64url segments separated by dots)",
@@ -296,6 +315,9 @@
       "REWORKReputationPassport",
       "REWORKReputationSummary"
     ],
-    "certificate_type": "REWORKProofOfWorkCredential"
+    "certificate_type": "REWORKProofOfWorkCredential",
+    "newest_only": [
+      "REWORKHfRepoControl"
+    ]
   }
 }

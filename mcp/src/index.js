@@ -245,13 +245,22 @@ async function callTool(name, args) {
     digest = String(digest).toLowerCase();
     try {
       const record = await http(`/github-app/attestations/${digest}`);
+      // A repository-control challenge can be genuine and still prove
+      // nothing today: say so unless its claim is verified.
+      const claim = record && typeof record.claim === 'object' && record.claim !== null ? record.claim : null;
+      const note = claim && claim.status !== 'verified'
+        ? SPEC.notes.claim_not_current.replace('{status}', String(claim.status || 'unknown'))
+        : SPEC.notes.issued;
       return {
         ...record,
-        assurance_note: SPEC.notes.issued,
+        assurance_note: note,
       };
     } catch (err) {
       if (String(err.message).includes('REWORK API 404')) {
         const said = args && args.credential ? stated(args.credential) : { type: null, certificate_id: null };
+        if (SPEC.registry.newest_only.includes(said.type)) {
+          return { issued: null, digest_sha256: digest, credential_type: said.type, assurance_note: SPEC.notes.registry_newest_only };
+        }
         if (SPEC.registry.signed_afresh.includes(said.type)) {
           // Signed afresh on every download: no two copies share a digest, so
           // there was never a record to find, and "not issued" would be a
