@@ -98,7 +98,7 @@ const TOOLS = SPEC.tools.map((t) => JSON.parse(JSON.stringify(t)));
 // Here the lookup hashes the credential in this process, which is a stronger
 // promise than the shared wording makes, so this server says so.
 TOOLS.find((t) => t.name === 'lookup_rework_attestation').inputSchema.properties.credential.description =
-  'The VC-JWT. Hashed locally; never sent anywhere.';
+  'The VC-JWT. Hashed locally and never sent anywhere. For a certificate credential, the certificate id it names (already public) is looked up as well.';
 
 async function http(path, { method = 'GET', body } = {}) {
   const ctl = new AbortController();
@@ -120,6 +120,60 @@ async function http(path, { method = 'GET', body } = {}) {
   }
 }
 
+/**
+ * What a credential SAYS it is, read without checking its signature: the kind
+ * of REWORK credential, and the certificate it names when it is a certificate
+ * credential. Never evidence on its own: a forger writes these too.
+ */
+function stated(credential) {
+  const out = { type: null, certificate_id: null };
+  const parts = typeof credential === 'string' ? credential.trim().split('.') : [];
+  if (parts.length !== 3) return out;
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+  } catch {
+    return out;
+  }
+  const vc = payload && typeof payload === 'object' ? payload.vc : null;
+  if (!vc || typeof vc !== 'object' || Array.isArray(vc)) return out;
+  for (const kind of Array.isArray(vc.type) ? vc.type : []) {
+    if (typeof kind === 'string' && Object.prototype.hasOwnProperty.call(CREDENTIAL_TYPES, kind)) {
+      out.type = kind;
+      break;
+    }
+  }
+  if (out.type === SPEC.registry.certificate_type) {
+    const subject = vc.credentialSubject;
+    const achievement = subject && typeof subject === 'object' ? subject.achievement : null;
+    const found = (achievement && typeof achievement === 'object' ? achievement.identifier : null) || payload.jti;
+    if (typeof found === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(found)) out.certificate_id = found;
+  }
+  return out;
+}
+
+/**
+ * What REWORK holds for a certificate id. Only the id is sent, and it is
+ * already public on the certificate's own page; `found` and `revoked` are null
+ * when the API could not be reached, so "could not look" is never reported as
+ * "no such certificate".
+ */
+async function certificateRecord(id) {
+  const fallback = { id, found: null, revoked: null, verify_url: `${SPEC.site}/verify/${id}` };
+  try {
+    const res = await http(`/proofs/certificates/${encodeURIComponent(id)}/status`);
+    return {
+      id,
+      found: typeof res.found === 'boolean' ? res.found : null,
+      revoked: typeof res.revoked === 'boolean' ? res.revoked : null,
+      verify_url: fallback.verify_url,
+    };
+  } catch (err) {
+    log(`certificate ${id} could not be read: ${err.message}`);
+    return fallback;
+  }
+}
+
 async function callTool(name, args) {
   if (name === 'verify_rework_credential') {
     const credential = (args && args.credential) || '';
@@ -135,15 +189,22 @@ async function callTool(name, args) {
     // check, or it could not be read); a server that predates the check
     // sends nothing, which is null too.
     const revoked = typeof res.revoked === 'boolean' ? res.revoked : null;
+    // The API has checked the signature by here, so what the credential
+    // states about its kind is REWORK's word.
+    const kind = (res.valid === true || revoked === true) ? stated(credential).type : null;
     let note;
     if (revoked === true) note = SPEC.notes.revoked;
     else if (assurance && ASSURANCE[assurance]) note = ASSURANCE[assurance].does_not_mean;
+    // A kind of credential with no assurance level by design (a certificate,
+    // a receipt, a passport): say what it is and its ceiling.
+    else if ((assurance === undefined || assurance === null) && kind) note = `${CREDENTIAL_TYPES[kind]} ${SPEC.notes.no_assurance_level}`;
     else note = SPEC.notes.unknown_assurance;
     return {
       valid: res.valid === true,
       reason: res.reason || null,
       revoked,
       issuer: res.issuer || null,
+      credential_type: kind,
       credential_subject: subject,
       // An agent that only reads `valid` would treat every credential as
       // equally strong. Ship the ceiling alongside the verdict.
@@ -190,6 +251,16 @@ async function callTool(name, args) {
       };
     } catch (err) {
       if (String(err.message).includes('REWORK API 404')) {
+        const said = args && args.credential ? stated(args.credential) : { type: null, certificate_id: null };
+        if (SPEC.registry.signed_afresh.includes(said.type)) {
+          // Signed afresh on every download: no two copies share a digest, so
+          // there was never a record to find, and "not issued" would be a
+          // false alarm about a genuine credential.
+          const answer = { issued: null, digest_sha256: digest, credential_type: said.type };
+          if (said.certificate_id) answer.certificate = await certificateRecord(said.certificate_id);
+          answer.assurance_note = SPEC.notes.registry_not_kept;
+          return answer;
+        }
         return {
           issued: false,
           digest_sha256: digest,

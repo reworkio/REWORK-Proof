@@ -47,6 +47,12 @@ only the digest. With the hosted server the credential travels to REWORK,
 which hashes it there and stores nothing; pass `digest` yourself if you would
 rather it never left.
 
+A certificate credential (the file a certificate's share page downloads) is
+signed afresh each time, so no two copies share a digest and REWORK keeps no
+issuance record for it. Handed one, the lookup says so instead of "not
+issued", and looks up the certificate it names: only that certificate's id is
+sent, and the id is already public on the certificate's own page.
+
 Every tool only reads, and each one says so (`readOnlyHint`), so a client can
 run them without asking each time.
 

@@ -67,6 +67,13 @@
           "assurance_note": {
             "type": "string",
             "description": "The ceiling on what this result proves. Read it before relying on the result."
+          },
+          "credential_type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Which kind of REWORK credential this is, as the credential states it; null when it is not valid or not a known kind."
           }
         },
         "required": [
@@ -170,13 +177,13 @@
     {
       "name": "lookup_rework_attestation",
       "title": "Look up whether REWORK issued a credential",
-      "description": "Check whether REWORK actually ISSUED a credential - not just whether its signature verifies. A forged-but-well-formed token fails this; a real one returns its issuance record and the CURRENT OpenTimestamps receipt, which may have been upgraded to a Bitcoin confirmation since issue. Pass the credential (its sha256 is the lookup key) or the digest directly.",
+      "description": "Check whether REWORK actually ISSUED a credential - not just whether its signature verifies. A forged-but-well-formed token fails this; a real one returns its issuance record and the CURRENT OpenTimestamps receipt, which may have been upgraded to a Bitcoin confirmation since issue. Pass the credential (its sha256 is the lookup key) or the digest directly. Certificate, video-receipt and passport credentials are signed afresh on every download and have no issuance record: pass the credential itself (not its digest) and the answer says so, with the certificate it names looked up instead.",
       "inputSchema": {
         "type": "object",
         "properties": {
           "credential": {
             "type": "string",
-            "description": "The VC-JWT. Only its sha256 digest is used as the lookup key; the credential itself is not stored."
+            "description": "The VC-JWT. Only its sha256 digest is used as the lookup key; the credential itself is not stored. For a certificate credential, the certificate id it names is looked up as well."
           },
           "digest": {
             "type": "string",
@@ -189,8 +196,11 @@
         "type": "object",
         "properties": {
           "issued": {
-            "type": "boolean",
-            "description": "Whether REWORK has a record of issuing a credential with this digest."
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether REWORK has a record of issuing a credential with this digest. Null when REWORK keeps no per-digest record for this kind of credential, so the lookup can neither confirm nor deny it."
           },
           "digest_sha256": {
             "type": "string"
@@ -198,6 +208,43 @@
           "assurance_note": {
             "type": "string",
             "description": "The ceiling on what this result proves. Read it before relying on the result."
+          },
+          "credential_type": {
+            "type": "string",
+            "description": "Present when the answer depends on the kind of credential: the kind it states, unverified."
+          },
+          "certificate": {
+            "type": "object",
+            "description": "Present for a certificate credential: the certificate it names, looked up by id.",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "found": {
+                "type": [
+                  "boolean",
+                  "null"
+                ],
+                "description": "Whether REWORK has that certificate; null when it could not be read."
+              },
+              "revoked": {
+                "type": [
+                  "boolean",
+                  "null"
+                ],
+                "description": "Whether it has been revoked; null when not found or not read."
+              },
+              "verify_url": {
+                "type": "string",
+                "description": "Its public page."
+              }
+            },
+            "required": [
+              "id",
+              "found",
+              "revoked",
+              "verify_url"
+            ]
           }
         },
         "required": [
@@ -233,10 +280,22 @@
     "issued": "Issuance confirms REWORK signed a credential with this digest. It is still not a review of the code or a claim the work is any good - and a \"submitted\" timestamp is a calendar promise, only \"confirmed\" means anchored in Bitcoin.",
     "not_issued": "REWORK has no record of issuing a credential with this digest. A valid signature with no issuance record deserves suspicion: it could predate the registry, or it could be a key compromise.",
     "revoked": "REWORK revoked this credential after issuing it. Its signature still verifies, which is exactly why revocation has to be checked: do not rely on it.",
-    "revocation_unchecked": "Whether this credential has since been revoked could not be checked just now. The signature is valid; treat the result as incomplete."
+    "revocation_unchecked": "Whether this credential has since been revoked could not be checked just now. The signature is valid; treat the result as incomplete.",
+    "no_assurance_level": "This type of credential carries no assurance level. A valid signature shows REWORK issued it and that it has not been altered; it is not a review of how good the work is.",
+    "registry_not_kept": "REWORK keeps no per-digest record for this type of credential: it is signed afresh each time it is downloaded, so no two copies share a digest, and this lookup can neither confirm nor deny it. That is not a sign of forgery. Check its signature with verify_rework_credential; what the credential says about itself here is unverified until then."
   },
   "errors": {
     "credential_required": "credential is required: pass the compact VC-JWT (three base64url segments separated by dots)",
     "digest_required": "pass either `credential` (the VC-JWT) or `digest` (64 hex chars)"
+  },
+  "site": "https://reworkio.com",
+  "registry": {
+    "signed_afresh": [
+      "REWORKProofOfWorkCredential",
+      "REWORKVideoProvenanceReceipt",
+      "REWORKReputationPassport",
+      "REWORKReputationSummary"
+    ],
+    "certificate_type": "REWORKProofOfWorkCredential"
   }
 }
