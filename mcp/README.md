@@ -24,7 +24,7 @@ No API key. No account. Every tool here reads public endpoints.
 
 ### Or use the hosted server
 
-The same four tools are served at a URL, for clients that take a remote
+The same tools are served at a URL, for clients that take a remote
 server (Claude's connectors, for one) and for anyone who would rather not
 install anything:
 
